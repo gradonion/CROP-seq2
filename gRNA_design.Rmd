@@ -1,0 +1,70 @@
+---
+title: "CRISPRi gRNA Design"
+author: "Yifan Zhou"
+date: "11/24/2019"
+output:   
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=6, fig.height=4,
+                      echo=TRUE, warning=FALSE, message=FALSE, comment = NA, fig.align = 'center')
+```
+
+```{r load data}
+library(ggplot2)
+library(data.table)
+library(Seurat)
+data_dir <- '/project2/xinhe/CROP_seq/line_09_11/filtered_feature_bc_matrix/'
+design <- readRDS(paste0(data_dir,'line0911_design.rds'))
+```
+
+Single-cell gRNA profile summarized over the 8921 Glut-09,11 cells we kept:
+
+### Number of gRNAs types each cell contains
+
+```{r}
+ngRNA_per_cell <- data.frame(num_gRNA = design$nlocus_gRNA[keep_cells], num_locus = design$nlocus[keep_cells])
+
+ggplot(ngRNA_per_cell, aes(x=num_gRNA)) + geom_histogram(bins = 24,color="lightcyan3", fill="lightcyan4") +
+  xlab(label = '# of gRNA types per cell') + ylab(label = 'count') +
+  theme_classic() + theme(axis.text = element_text(size = 14),
+                          axis.title = element_text(size = 14,face = 'bold'))
+```
+
+### Number of cells targeted at each locus
+```{r}
+ncell_locus <- rowSums(design$locus[keep_cells]>0)
+tmp <- c(ncell_locus,ncell_locus[c(17,13)])
+ncell_locus <- tmp[-c(13,17)]
+ncell_locus <- data.frame(count=ncell_locus, locus=names(ncell_locus))
+ncell_locus$locus <- factor(ncell_locus$locus, levels = ncell_locus$locus)
+ggplot(data = ncell_locus,aes(x=locus,y=count)) + geom_bar(stat="identity",width = 0.6) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 11), 
+        axis.text.y = element_text(size = 14), 
+        axis.title.y = element_text(size = 14,face = 'bold'),
+        axis.title.x = element_blank())
+```
+
+***
+
+Since we are going to use all the cells regardless of their clustering structure, we need to check if the gRNA uptake of cells is independent of their clustering pattern.
+
+Below shows the distribution of cells that contain VPS45_2_gRNA among all cells:
+
+```{r eval=FALSE, echo=TRUE}
+umap_corrected$VPS45_2_gRNA = as.numeric(design$gRNA['VPS45_2_gene',crop_cells])>0
+umap_corrected$VPS45_2_gRNA = factor(umap_corrected$VPS45_2_gRNA,levels = c('TRUE','FALSE'))
+ggplot(umap_corrected,aes(x=UMAP_1,y=UMAP_2)) + geom_point(aes(color=VPS45_2_gRNA),size = 0.5) + 
+  scale_color_manual(values=c("#FF6961","#EBECF0")) + theme_classic() + 
+  theme(axis.text = element_text(size = 12), axis.title = element_text(size = 14), 
+        legend.text = element_text(size = 11),legend.title = element_text(size = 11))
+```
+
+```{r echo=FALSE, out.width = '700px', fig.align='right'}
+include_graphics(paste0(data_dir,'umap_vps45_cells.png'))
+```

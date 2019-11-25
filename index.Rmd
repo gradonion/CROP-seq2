@@ -1,0 +1,49 @@
+---
+title: "CROP-seq Single Cell Gene Perturbation Analysis"
+author: "Yifan Zhou"
+date: "11/24/2019"
+output:   
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=6, fig.height=4,
+                      echo=TRUE, warning=FALSE, message=FALSE, comment = NA, fig.align = 'center')
+```
+
+## CROP-seq Study
+
+Study design is similar to what was done [here](https://gradonion.github.io/CROP-seq/index.html). We try to use CROP-seq to confirm the regulatory functionality and putative cis-target genes for a set of genomic loci of interest.
+
+The only difference is the cells involved are iPSC-derived Glutamatergic neurons (Glut). 
+
+For CRISPRi, we designed 3 guide RNA sequences inhibiting the transcriptional activity near the target locus for each of the 21 SNP sites of interest:
+
+```{r echo=FALSE}
+library(knitr)
+library(kableExtra)
+options(stringsAsFactors = F)
+snp.lst <- read.table('/project2/xinhe/CROP_seq/line_08/cis_analysis/data/scRNA_seq_SNP_list.txt',
+                      sep = '\t',header = F,col.names = c('rsID','gene locus'))
+kable(snp.lst,caption = 'SNP list') %>% kable_styling() %>% scroll_box(width = "90%", height = "300px")
+```
+
+***
+
+## Single-cell transcriptome profile
+
+Please see this [page](transcriptome.html) for processing on single-cell UMI count data.
+
+## Single-cell gRNA profile
+
+Please see this [page](gRNA_design.html) for CRISPRi gRNA design per cell.
+
+## Differential Expression Analysis on cis-Genes
+
+Please see this [page](cis_analysis_result_line0911.html) for DE analysis on _cis_ genes using `sctransform` + _t_ test.
+
+
+

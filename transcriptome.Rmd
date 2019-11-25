@@ -1,0 +1,150 @@
+---
+title: "Single-cell RNA-seq UMI Data Processing"
+author: "Yifan Zhou"
+date: "11/24/2019"
+output:   
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=6, fig.height=4,
+                      echo=TRUE, warning=FALSE, message=FALSE, comment = NA, fig.align = 'center')
+```
+
+### We focused on 10x single-cell UMI data collected from iPSC-derived Glutamatergic neurons (Glut-09,11).
+
+```{r load data}
+library(ggplot2)
+library(data.table)
+library(Seurat)
+data_dir <- '/project2/xinhe/CROP_seq/line_09_11/filtered_feature_bc_matrix/'
+gene.exp = data.frame(fread(paste0(data_dir,'gene_exp.txt.gz'),sep = '\t',header = T),
+                      row.names = 1, check.names = F)
+```
+
+Dimension of the gene $\times$ cell UMI count matrix: 29846 $\times$ 13262
+
+## Cell-wise statistics (number of genes, library size, mitochondria count percentage)
+```{r eval=FALSE, echo=TRUE}
+crop.seurat <- CreateSeuratObject(gene.exp, min.cells = 3, min.features = 200)
+crop.seurat[['percent.mt']] <- PercentageFeatureSet(crop.seurat, pattern='^MT.')
+VlnPlot(crop.seurat, features = c('nFeature_RNA','nCount_RNA','percent.mt'), pt.size = 0)
+```
+
+```{r echo=FALSE, out.width = '650px', fig.align='center'}
+include_graphics(paste0(data_dir,'seurat_cell_stats.png'))
+```
+
+## Cell Filtering and Clustering
+
+```{r echo=FALSE}
+crop.seurat = readRDS(paste0(data_dir,'seurat_nFeature_3000_mt_15.rds'))
+```
+
+Based on the violin plots of cell-wise statistics above, we filter out cells with low number of genes or high percentage of mitochondria gene counts. The cells kept all have a number of unique genes > 3000, and a proportion of MT gene counts < 15%.
+
+```{r eval=FALSE, echo=TRUE}
+crop.seurat <- subset(crop.seurat, subset = nFeature_RNA > 3000 & percent.mt < 15)
+```
+
+Next, we normalize the raw count data of the top 2000 variable genes using `sctransform`, regressing out library size and percentage of MT genes per cell.
+```{r eval=FALSE, echo=TRUE}
+crop.seurat <- SCTransform(crop.seurat, vars.to.regress = "percent.mt")
+```
+
+### PCA elbow plot of normalized data
+```{r eval=FALSE, echo=TRUE}
+crop.seurat <- RunPCA(crop.seurat)
+ElbowPlot(crop.seurat)
+```
+
+```{r echo=FALSE}
+ElbowPlot(crop.seurat)
+```
+
+### UMAP representation based on the first 20 PCs
+```{r eval=FALSE, echo=TRUE}
+crop.seurat <- FindNeighbors(crop.seurat, reduction = "pca", dims = 1:20)
+crop.seurat <- FindClusters(crop.seurat, resolution = 0.04)
+crop.seurat <- RunUMAP(crop.seurat, reduction.type = "pca", dims = 1:20)
+DimPlot(crop.seurat, reduction = 'umap')
+```
+
+```{r echo=FALSE}
+DimPlot(crop.seurat, reduction = 'umap')
+```
+
+### MAP2 expression in cells
+```{r}
+umap_corrected = DimPlot(crop.seurat, reduction = 'umap')
+umap_corrected = umap_corrected$data
+crop_cells = crop.seurat@assays$RNA@counts@Dimnames[[2]]
+umap_corrected$cell = crop_cells
+umap_corrected$MAP2 = as.numeric(gene.exp['MAP2',crop_cells])
+ggplot(umap_corrected,aes(x=UMAP_1,y=UMAP_2)) + geom_point(aes(color=log(MAP2+1), alpha = 0.5)) +
+  scale_colour_gradientn(colours = terrain.colors(10)) + theme_classic()
+keep_cells = umap_corrected$cell[umap_corrected$MAP2 > 0]
+```
+
+MAP2 (microtubule-associated protein 2) is a marker gene expressed in Glutamaterguc neurons.    
+To ensure that our differential analyses are only done on Glutamaterguc neurons, we keep cells with at least 1 MAP2 count, resulting in 8921 cells in the end.
+
+***
+
+We further explore the characteristics of the UMI count data within these 8921 cells.
+
+## Gene-wise statistics (detection rate, mean, variance)
+
+### Gene detection rate
+
+```{r}
+gene.exp = gene.exp[,keep_cells]
+gene.stats <- data.frame(detection = rowMeans(gene.exp>0),
+                         mean_exp = rowMeans(gene.exp),
+                         var_exp = apply(gene.exp, 1, var))
+ggplot(gene.stats,aes(x=detection)) + geom_histogram(color="lightcyan3", fill="lightcyan4") +
+    xlab(label = '% of cells a gene is detected in') + 
+    theme_classic() + theme(axis.text = element_text(size = 14),
+                          axis.title = element_text(size = 14,face = 'bold'))
+```
+
+### Gene expression mean ~ variance
+
+```{r}
+ggplot(gene.stats, aes(log10(mean_exp), log10(var_exp))) + 
+  geom_point(alpha=0.3, shape=16) + geom_density_2d(size = 0.3) +
+  geom_abline(intercept = 0, slope = 1, color='red') + 
+  xlab(label = 'log10(mean of expression)') + 
+  ylab(label = 'log10(variance of expression)') + theme_bw() +
+  theme(axis.text = element_text(size = 14),axis.title = element_text(size = 14,face = 'bold'))
+```
+(Red: 1:1 line where variance and mean are roughly equal, which is expected under a Poisson model.)
+
+### Gene mean expression ~ detection rate
+```{r}
+x = seq(from = -3, to = 2, length.out = 1000)
+poisson_model <- data.frame(log_mean = x, detection_rate = 1 - dpois(0, lambda = 10^x))
+ggplot(gene.stats,aes(x=log10(mean_exp),y=detection)) + geom_point(alpha=0.3, shape=16) +
+  geom_line(data=poisson_model, aes(x=log_mean, y=detection_rate), color='red') +
+    xlab(label = 'log10(mean expression)') + 
+    ylab(label = 'detection rate') +
+    theme_bw() + theme(axis.text = element_text(size = 14),
+                          axis.title = element_text(size = 14,face = 'bold'))
+```
+(Red curve: the expected detection rate under Poisson model.)   
+We see a lower than expected detection rate in the medium expression range. However, for the highly expressed genes, the rate is very close to 1.0, suggesting that there is no zero-inflation in the counts for those genes and that zero-inflation is a result of overdispersion, rather than an independent systematic bias.
+
+## sctransform on single-cell UMI data
+
+`sctransform` models the expression of each gene as a negative binomial random variable with a mean that depends on other variables, such as the sequencing depth for each cell.
+
+Each observed UMI count is transformed into a Pearson residual which can be interpreted as the number of standard deviations an observed count was away from the expected mean. If the model accurately describes the mean-variance relationship and the dependency of mean and latent factors, then the result should have mean zero and a stable variance across the range of expression.
+
+The `vst` function was used to estimate model parameters and performs the variance stabilizing transformation. Here we use the default – log10 of the total UMI counts of a cell – as the latent variable for sequencing depth for each cell.
+
+```
+vst_out <- sctransform::vst(sparse_count,n_genes = NULL,return_gene_attr = TRUE, return_cell_attr = TRUE)
+```
