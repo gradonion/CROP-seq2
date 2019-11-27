@@ -34,16 +34,9 @@ include_graphics(paste0(dir,'filtered_feature_bc_matrix/seurat_cell_stats.png'))
 
 We only keep cells with number of unique genes detected (nFeature_RNA) > 3000 and percentage of mitochondria counts (percent.mt) < 15%; then we further filter out cells that have no MAP2 reads detected. In the end, 8921 MAP2+ cells were kept.
 
-We used `sctransform` to convert the raw UMI count matrix of the 8921 cells into 'Pearson residuals' using the following command:
-```
-sctransform::vst(sparse_counts,n_genes = NULL,return_gene_attr = TRUE, return_cell_attr = TRUE)
-```
+### gRNA Conditions for Differential Expression Analysis
 
-## Differential Analysis
-
-After we further removed cells that don't have any designed gRNAs detected, there are 8015 cells left. We excluded genes that are expressed in less than 20% of these cells, and conducted differential expression analysis on the `sctransform`ed data.
-
-We partition the cells for DE analysis in this way:
+After we further removed cells that don't have any designed gRNAs detected, there are 8015 cells left. We partition these cells for DE analysis in this way:
 
 For each designed gRNA (21x3 in total) condition, we partition all of the cells into 2 groups: cells that contain that gRNA, and cells that do not contain that gRNA.
 
@@ -58,14 +51,24 @@ names(tmp.df) = c('gRNA 1','gRNA 2','gRNA 3')
 kable(tmp.df) %>% kable_styling() %>% scroll_box(width = "80%", height = "300px")
 ```
 
-We exclude gRNA conditions that result in < 50 target cells, 'NGEF_2' and 'TRANK1_1', from the subsequent analysis.
+We excluded gRNA conditions that result in < 50 target cells, 'NGEF_2' and 'TRANK1_1', from the subsequent sctransform analysis.
+
+## sctranform + _t_ test
+
+We used `sctransform` to convert the raw UMI count matrix of the 8921 cells into 'Pearson residuals' using the following command:
+```
+sctransform::vst(sparse_counts,n_genes = NULL,return_gene_attr = TRUE, return_cell_attr = TRUE)
+```
+And then used Student's _t_ test on the `sctransform`ed expression data to test for differentially expressed genes in test and control groups of cells.
+
+We only tested for genes that were expressed in > 20% of all 8921 cells.
 
 In _cis_ analysis, we only need to focus on genes within $\pm$ 500kb / 1MB of the gRNA locus of interest. Then for each gRNA condition, we test for differential expression in target vs non-target cells for each of the _cis_ genes using categorical regression (Student's _t_ test).
 
 For DE analysis on each gRNA, to ensure there is no inflation of _p_ value, we performed permutation 20 times by scrambling the labels of all cells and conducting _t_ test on all genes (10260 with > 20% detection rate). Then, we used all 10260 $\times$ 20 _t_ statistics obtained as the null distribution to compute the empirical _p_ value of each gene. 
 
-The null _p_ value distribution of 936 _cis_-gene - gRNA pairs over 20 permutations is shown here:
-```{r, out.width = '500px', fig.align='center'}
+The null _p_ value distribution of 936 1Mb _cis_-gene - gRNA pairs over 20 permutations is shown here:
+```{r echo=F, out.width = '500px', fig.align='center'}
 include_graphics(paste0(dir,'cis_analysis/result/MAP2_8921_perm_summary/cis_pval_distribution.jpg'))
 ```
 
@@ -113,6 +116,69 @@ mutate(formatted.df,
   kable(format = "html", escape = F) %>%
   kable_styling() %>% scroll_box(width = "100%", height = "400px")
 ```
+
+```{r echo=F}
+cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
+cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+```
+
+## edgeR
+
+Another DE method we tried is using `edgeR QLF` test directly on the raw UMI count matrix of the 8015 MAP2+ gRNA+ cells. We partitioned the cells into target / non-target groups the same way as before. 
+
+We observed significant inflation for small p values, so for each gRNA condition, we performed permutation 20 times by scrambling the labels of all cells and conducting the same `edgeR QLF` test on all genes (12091 with > 10% detection rate). Then, we used all 12091 $\times$ 20 p values obtained from permutations as the null distribution to compute the empirical _p_ value of each gene under each gRNA condition.
+
+
+The null _p_ value distribution of 1101 1Mb _cis_-gene - gRNA pairs over 20 permutations is shown here:
+```{r echo=F, out.width = '500px', fig.align='center'}
+include_graphics(paste0(dir,'cis_analysis/result/edgeR_perm_summary/cis_pval_distribution.png'))
+```
+
+We can see that DE analysis using `edgeR QLF` test indeed results in inflation of small p values.
+
+### 500 kb _cis_ gene result
+```{r, results='asis'}
+edgeR_cis_summary = readRDS(paste0(dir,'cis_analysis/result/edgeR_observed_summary/cis_summary_gRNA.MAP2_8015.genes_0.1_edgeR_w_empiricalP.rds'))
+formatted.df = edgeR_cis_summary$cis_summary_500kb
+fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
+pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
+mutate(formatted.df, 
+       logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
+       PValue = cell_spec(PValue, "html", color = ifelse(PValue < 0.05, "orange", "black")),
+       empirical_pval = cell_spec(empirical_pval, "html", color = ifelse(empirical_pval < 0.05, "orange", "black")),
+       pval_adj_cis = cell_spec(pval_adj_cis, "html", color = ifelse(pval_adj_cis < 0.1, "red", "black")) ) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling() %>% scroll_box(width = "100%", height = "400px")
+```
+
+```{r echo=F}
+cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
+cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+```
+
+***
+
+### 1 Mb _cis_ gene result
+
+```{r, results='asis'}
+formatted.df = edgeR_cis_summary$cis_summary_1Mb
+fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
+pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
+mutate(formatted.df, 
+       logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
+       PValue = cell_spec(PValue, "html", color = ifelse(PValue < 0.05, "orange", "black")),
+       empirical_pval = cell_spec(empirical_pval, "html", color = ifelse(empirical_pval < 0.05, "orange", "black")),
+       pval_adj_cis = cell_spec(pval_adj_cis, "html", color = ifelse(pval_adj_cis < 0.1, "red", "black")) ) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling() %>% scroll_box(width = "100%", height = "400px")
+```
+
 
 ```{r echo=F}
 cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
