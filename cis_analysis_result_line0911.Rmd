@@ -124,7 +124,7 @@ cat('cis pairs that have an empirical p values < 0.05:',pval_num)
 
 ## edgeR
 
-Another DE method we tried is using `edgeR QLF` test directly on the raw UMI count matrix of the 8015 MAP2+ gRNA+ cells. We partitioned the cells into target / non-target groups the same way as before. 
+Another DE method we tried is using `edgeR QLF` test directly on the raw UMI count matrix of the 8015 MAP2+ gRNA+ cells, and genes that have > 10% detection rate. We partitioned the cells into target / non-target groups the same way as before. 
 
 We observed significant inflation for small p values, so for each gRNA condition, we performed permutation 20 times by scrambling the labels of all cells and conducting the same `edgeR QLF` test on all genes (12091 with > 10% detection rate). Then, we used all 12091 $\times$ 20 p values obtained from permutations as the null distribution to compute the empirical _p_ value of each gene under each gRNA condition.
 
