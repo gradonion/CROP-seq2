@@ -80,8 +80,10 @@ cis_summary = readRDS(paste0(dir,'cis_analysis/result/cis_summary_gRNA.MAP2_8921
 formatted.df = cis_summary$cis_summary_500kb
 fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
 pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
 formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','beta','pval',
-                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
 formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
 mutate(formatted.df, 
        beta = cell_spec(beta, "html", color = ifelse(beta < 0, "red", "blue")),
@@ -93,8 +95,8 @@ mutate(formatted.df,
 ```
 
 ```{r echo=F}
-cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
-cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
 ```
 
 ***
@@ -105,8 +107,10 @@ cat('cis pairs that have an empirical p values < 0.05:',pval_num)
 formatted.df = cis_summary$cis_summary_1Mb
 fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
 pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
 formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','beta','pval',
-                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
 formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
 mutate(formatted.df, 
        beta = cell_spec(beta, "html", color = ifelse(beta < 0, "red", "blue")),
@@ -118,32 +122,35 @@ mutate(formatted.df,
 ```
 
 ```{r echo=F}
-cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
-cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
 ```
 
 ## edgeR
 
 Another DE method we tried is using `edgeR QLF` test directly on the raw UMI count matrix of the 8015 MAP2+ gRNA+ cells, and genes that have > 10% detection rate. We partitioned the cells into target / non-target groups the same way as before. 
 
-We observed significant inflation for small p values, so for each gRNA condition, we performed permutation 20 times by scrambling the labels of all cells and conducting the same `edgeR QLF` test on all genes (12091 with > 10% detection rate). Then, we used all 12091 $\times$ 20 p values obtained from permutations as the null distribution to compute the empirical _p_ value of each gene under each gRNA condition.
+We observed significant inflation for small _p_ values, so for each gRNA condition, we performed permutation 50 times by scrambling the labels of all cells and conducting the same `edgeR QLF` test on all genes (12091 with > 10% detection rate). Then, we used all 12091 $\times$ 50 _p_ values obtained from permutations as the null distribution to compute the empirical _p_ value of each gene under each gRNA condition.
 
 
-The null _p_ value distribution of 1101 1Mb _cis_-gene - gRNA pairs over 20 permutations is shown here:
+The null _p_ value distribution of 1101 1Mb _cis_-gene - gRNA pairs over 50 permutations is shown here:
 ```{r echo=F, out.width = '500px', fig.align='center'}
-include_graphics(paste0(dir,'cis_analysis/result/edgeR_perm_summary/cis_pval_distribution.png'))
+include_graphics(paste0(dir,'cis_analysis/result/edgeR_perm_summary/cis_pval_distribution_50_perms.png'))
 ```
 
-We can see that DE analysis using `edgeR QLF` test indeed results in inflation of small p values.
+We can see that DE analysis using `edgeR QLF` test indeed results in inflation of small _p_ values.
 
 ### 500 kb _cis_ gene result
 ```{r, results='asis'}
-edgeR_cis_summary = readRDS(paste0(dir,'cis_analysis/result/edgeR_observed_summary/cis_summary_gRNA.MAP2_8015.genes_0.1_edgeR_w_empiricalP.rds'))
+# edgeR_cis_summary = readRDS(paste0(dir,'cis_analysis/result/edgeR_observed_summary/cis_summary_gRNA.MAP2_8015.genes_0.1_edgeR_w_empiricalP.rds'))
+edgeR_cis_summary = readRDS(paste0(dir,'cis_analysis/result/edgeR_observed_summary/cis_summary_gRNA.MAP2_8015.genes_0.1_edgeR_w_perm_50.rds'))
 formatted.df = edgeR_cis_summary$cis_summary_500kb
-fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
-pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+fdr_num = nrow(filter(formatted.df, pval_adj_cis < 0.1))
+pval_num = nrow(filter(formatted.df, empirical_pval < 0.05))
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
 formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
-                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
 formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
 mutate(formatted.df, 
        logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
@@ -155,8 +162,8 @@ mutate(formatted.df,
 ```
 
 ```{r echo=F}
-cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
-cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
 ```
 
 ***
@@ -167,8 +174,10 @@ cat('cis pairs that have an empirical p values < 0.05:',pval_num)
 formatted.df = edgeR_cis_summary$cis_summary_1Mb
 fdr_num = dim(filter(formatted.df, pval_adj_cis < 0.1))[1]
 pval_num = dim(filter(formatted.df, empirical_pval < 0.05))[1]
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
 formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
-                                        'empirical_pval','pval_adj_cis')) %>% arrange(pval_adj_cis)
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
 formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
 mutate(formatted.df, 
        logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
@@ -179,9 +188,93 @@ mutate(formatted.df,
   kable_styling() %>% scroll_box(width = "100%", height = "400px")
 ```
 
+```{r echo=F}
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
+```
+
+## edgeR (Siwei)
+
+We tried is using `edgeR QLF` test directly on the raw UMI count matrix. But we filtered and partitioned the cells in a  different way than before:
+
+Cells were assigned uniquely to one of the gRNAs in this way: only cells in which the read count of a particular gRNA _g_ is > 3 times the total read count of all other gRNAs are assigned to gRNA _g_.
+
+There are 5250 cells that can be uniquely assigned to a certain gRNA group, and have at least 1 count of MAP2.
+
+Differential expression analysis was conducted between each gRNA group and the same negative control group (which have 321 cells that were uniquely assigned to one of the 5 designed negative control gRNAs). The number of cells uniquely assigned to other gRNA groups are listed here:
+
+
+```{r echo=FALSE, results='asis'}
+gRNA_assign_3x <- readRDS(paste0(dir,"cis_analysis/data/gRNA_assign_3x.rds"))
+num_per_gRNA = table(gRNA_assign_3x)[-c(37,47,48)]
+tmp.mtx = matrix(num_per_gRNA,nrow = 3)
+tmp.name = sapply(strsplit(names(num_per_gRNA),split = '_'), function(x){x[1]})
+tmp.name = tmp.name[seq(1,length(tmp.name),3)]
+tmp.df = as.data.frame(t(tmp.mtx), row.names = tmp.name)
+names(tmp.df) = c('gRNA 1','gRNA 2','gRNA 3')
+kable(tmp.df) %>% kable_styling() %>% scroll_box(width = "80%", height = "300px")
+```
+
+All genes (except those with 0 count in all 5250 cells) are included in the DE test. 
+
+Similarly, to correct for p value inflation, we performed permutation 20 times by scrambling the labels of all cells and conducting the same `edgeR QLF` test on all genes (23361 with non-zero counts). Then, we used all 23361 $\times$ 20 p values obtained from permutations as the null distribution to compute the empirical _p_ value of each gene under each gRNA condition.
+
+
+The null _p_ value distribution of 1605 1Mb _cis_-gene - gRNA pairs over 20 permutations is shown here:
+```{r echo=F, out.width = '500px', fig.align='center'}
+include_graphics(paste0(dir,'cis_analysis/result/edgeR_Siwei_perm_summary/cis_pval_distribution_20_perms.png'))
+```
+
+We can see that DE analysis using `edgeR QLF` test on all genes results in inflation of both small and large _p_ values.
+
+### 500 kb _cis_ gene result
+```{r, results='asis'}
+edgeR_cis_summary = readRDS(paste0(dir,'cis_analysis/result/edgeR_observed_summary/cis_summary_gRNA.Siwei_perm_20.rds'))
+formatted.df = edgeR_cis_summary$cis_summary_500kb
+fdr_num = nrow(filter(formatted.df, pval_adj_cis < 0.1))
+pval_num = nrow(filter(formatted.df, empirical_pval < 0.05))
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
+formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
+formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
+mutate(formatted.df, 
+       logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
+       PValue = cell_spec(PValue, "html", color = ifelse(PValue < 0.05, "orange", "black")),
+       empirical_pval = cell_spec(empirical_pval, "html", color = ifelse(empirical_pval < 0.05, "orange", "black")),
+       pval_adj_cis = cell_spec(pval_adj_cis, "html", color = ifelse(pval_adj_cis < 0.1, "red", "black")) ) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling() %>% scroll_box(width = "100%", height = "400px")
+```
 
 ```{r echo=F}
-cat('cis pairs that passed FDR < 0.1:',fdr_num,'\n')
-cat('cis pairs that have an empirical p values < 0.05:',pval_num)
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
+```
+
+***
+
+### 1 Mb _cis_ gene result
+```{r, results='asis'}
+formatted.df = edgeR_cis_summary$cis_summary_1Mb
+fdr_num = nrow(filter(formatted.df, pval_adj_cis < 0.1))
+pval_num = nrow(filter(formatted.df, empirical_pval < 0.05))
+# signif.df = filter(formatted.df, empirical_pval<0.05)
+
+formatted.df = select(formatted.df, c('SNP','locus','gRNA','gene','logFC','PValue',
+                                        'empirical_pval','pval_adj_cis')) %>% arrange(empirical_pval)
+formatted.df[,5:8] = signif(formatted.df[,5:8], digits = 3)
+mutate(formatted.df, 
+       logFC = cell_spec(logFC, "html", color = ifelse(logFC < 0, "red", "blue")),
+       PValue = cell_spec(PValue, "html", color = ifelse(PValue < 0.05, "orange", "black")),
+       empirical_pval = cell_spec(empirical_pval, "html", color = ifelse(empirical_pval < 0.05, "orange", "black")),
+       pval_adj_cis = cell_spec(pval_adj_cis, "html", color = ifelse(pval_adj_cis < 0.1, "red", "black")) ) %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling() %>% scroll_box(width = "100%", height = "400px")
+```
+
+```{r echo=F}
+cat(fdr_num,'cis pairs passed FDR < 0.1 \n')
+cat(pval_num,'cis pairs have an empirical p value < 0.05')
 ```
 
